@@ -108,12 +108,18 @@
             color: #d1d5db;
             font-size: 1.125rem; 
         }
+
+        .leaderboard-item {
+            transition: transform 0.2s ease-in-out;
+        }
+        .leaderboard-item:hover {
+            transform: scale(1.05);
+        }
         
     </style>
 </head>
 <body class="p-8 h-screen overflow-hidden flex flex-col">
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="fixed top-0 left-0 w-full h-full bg-slate-900 bg-opacity-90 flex justify-center items-center z-50 hidden">
         <div class="text-white text-3xl font-bold flex items-center">
             <svg class="animate-spin -ml-1 mr-4 h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -123,16 +129,13 @@
     
     <div class="max-w-full mx-auto flex flex-col flex-grow w-full"> 
         
-        <!-- Header -->
         <header class="text-left mb-6 flex justify-between items-end">
             <div>
-                <!-- Maximized Clock -->
                 <div id="liveClock" class="text-4xl font-bold text-slate-400 mb-2"></div>
                 <h1 class="text-4xl font-extrabold text-white">Swedzo Meuble Sales Tracker</h1>
             </div>
         </header>
 
-        <!-- Current Status & Countdown Timer -->
         <div id="statusContainer" class="bg-teal-600 p-6 rounded-xl shadow-lg mb-6 flex flex-col items-center transition duration-300">
             <div id="statusTextWrapper" class="text-xl font-semibold text-white flex space-x-12 items-center text-center">
                 <span>
@@ -144,13 +147,20 @@
                 </span>
             </div>
         </div>
+
+        <div id="leaderboard" class="grid grid-cols-3 gap-4 mb-6">
+            <div class="col-span-3 text-center text-white text-2xl font-extrabold tracking-wider bg-slate-800 p-2 rounded-lg mb-2">
+                HOURLY TOP PERFORMERS
+            </div>
+            <div id="leaderboardPosition1" class="leaderboard-item bg-slate-700 p-4 rounded-xl shadow-lg text-center flex flex-col justify-center"></div>
+            <div id="leaderboardPosition2" class="leaderboard-item bg-slate-700 p-4 rounded-xl shadow-lg text-center flex flex-col justify-center"></div>
+            <div id="leaderboardPosition3" class="leaderboard-item bg-slate-700 p-4 rounded-xl shadow-lg text-center flex flex-col justify-center"></div>
+        </div>
         
-        <!-- Team Grid -->
-        <div id="teamGrid" class="grid grid-cols-4 gap-4 overflow-y-auto" style="height: calc(100vh - 300px);">
+        <div id="teamGrid" class="grid grid-cols-4 gap-4 overflow-y-auto" style="height: calc(100vh - 430px);">
             <p class="text-white col-span-full text-center p-8 bg-slate-800 rounded-xl">Loading team configuration...</p>
         </div>
 
-        <!-- Toggle Button for Summary/History -->
         <div class="text-center mt-4 mb-0">
             <button id="toggleSummaryButton" onclick="toggleSummary()"
                     class="px-8 py-3 bg-teal-500 text-base text-white font-bold rounded-xl hover:bg-teal-700 transition duration-150 ease-in-out transform hover:scale-105 shadow-2xl">
@@ -158,7 +168,6 @@
             </button>
         </div>
 
-        <!-- Summary and History Container (Initially hidden, moved to bottom) -->
         <div id="summaryAndHistoryContainer" class="hidden absolute top-0 left-0 w-full h-full bg-slate-900 bg-opacity-95 p-8 z-40 overflow-y-auto">
             <div id="dailySummaryContainer" class="max-w-5xl mx-auto p-8 rounded-xl shadow-2xl transition duration-300">
                 <div class="flex justify-between items-center mb-6">
@@ -213,6 +222,11 @@
         const loadingOverlay = document.getElementById('loadingOverlay');
         const toggleSummaryButton = document.getElementById('toggleSummaryButton');
         const statusContainer = document.getElementById('statusContainer');
+        const leaderboardPositions = [
+            document.getElementById('leaderboardPosition1'),
+            document.getElementById('leaderboardPosition2'),
+            document.getElementById('leaderboardPosition3')
+        ];
 
 
         // --- Utility Functions ---
@@ -443,7 +457,60 @@
                 renderDashboard();
             }
         }
+
+        // --- Leaderboard Logic ---
         
+        function renderLeaderboard() {
+            let allReps = [];
+            
+            // 1. Gather all individual reps from all teams
+            Object.values(teamStructure).forEach(team => {
+                (team.reps || []).forEach(rep => {
+                    if (rep.sales > 0) { // Only include reps with sales
+                        allReps.push({ 
+                            name: rep.name, 
+                            sales: rep.sales, 
+                            team: team.name
+                        });
+                    }
+                });
+            });
+
+            // 2. Sort by sales descending
+            allReps.sort((a, b) => b.sales - a.sales);
+
+            // 3. Render Top 3
+            for (let i = 0; i < 3; i++) {
+                const positionDiv = leaderboardPositions[i];
+                positionDiv.classList.remove('bg-yellow-700', 'bg-slate-700');
+                
+                const rep = allReps[i];
+                let html = '';
+
+                if (rep) {
+                    const rank = i + 1;
+                    const salesColor = rank === 1 ? 'text-yellow-400' : 
+                                       rank === 2 ? 'text-slate-300' : 
+                                                    'text-orange-400';
+                    const icon = rank === 1 ? '👑' : rank === 2 ? '🥈' : '🥉';
+                    
+                    if (rank === 1) positionDiv.classList.add('bg-yellow-700');
+                    else positionDiv.classList.add('bg-slate-700');
+
+                    html = `
+                        <div class="text-4xl font-extrabold mb-1 ${salesColor}">${icon} ${rep.sales}</div>
+                        <div class="text-2xl font-bold text-white truncate">${rep.name}</div>
+                        <div class="text-base font-medium text-slate-300">(${rep.team})</div>
+                    `;
+                } else {
+                    positionDiv.classList.add('bg-slate-700');
+                    html = '<div class="text-xl font-bold text-slate-400 pt-2">No Sales Yet</div>';
+                }
+                positionDiv.innerHTML = html;
+            }
+        }
+
+
         // --- Rendering Logic ---
         
         function setBodyBackgroundColor() {
@@ -520,23 +587,18 @@
                  const cardHtml = `
                      <div class="achievement-card ${statusClass} p-5 rounded-xl border-t-8 border-opacity-75 flex flex-col justify-between">
                          
-                         <!-- Header Section (Status Bar) -->
                          <div class="status-header flex flex-col">
                              <div class="flex items-center justify-between">
                                  <div class="flex items-center">
                                      <svg class="w-7 h-7 mr-2 icon-color" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">${iconPath}</svg>
                                      <h2 class="text-xl font-extrabold text-white">${teamName}</h2>
                                  </div>
-                                 <!-- Target Display Field (Still editable for local viewing) -->
                                  <div class="flex items-center">
                                     <span class="text-base font-medium text-slate-200 mr-1">Target:</span>
-                                    <input type="number" min="1" value="${target}" 
-                                           class="target-input" 
-                                           data-team-id="${teamConfig.id}">
+                                    <span class="target-input text-white">${target}</span>
                                  </div>
                              </div>
                              
-                             <!-- Total Sales Display -->
                              <div class="flex justify-between items-baseline mt-3">
                                  <p class="text-base font-medium text-slate-200 uppercase">Total Sales</p>
                                  <div>
@@ -546,7 +608,6 @@
                              </div>
                          </div>
                          
-                         <!-- Rep Sales Entry List -->
                          <div class="pt-4">
                              <ul class="space-y-1">${repListHtml}</ul>
                          </div>
@@ -614,6 +675,9 @@
             const wallHour24 = now.getHours();
 
             currentHourDisplay.textContent = formatHourToTime(wallHour24);
+            
+            // Render the new Leaderboard before the team cards
+            renderLeaderboard(); 
             renderTeamGrid();
 
             if (lastCompletedHourData.teams.length > 0) {
@@ -645,3 +709,4 @@
     </script>
 </body>
 </html>
+```eof
