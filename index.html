@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swedzo Meuble Sales Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            /* Enforce full screen height and prevent vertical scrolling */
+            background-color: #0f172a; 
+            transition: background-color 0.5s ease-in-out;
+            padding: 2rem; 
+            height: 100vh;
+            /* CRITICAL FIX: Ensure no scrolling */
+            overflow: hidden; 
+        }
+        /* --- Card Styles --- */
+        .achievement-card {
+            /* Final fixed height for 8 reps */
+            height: 540px; 
+            background-color: #1e293b; 
+            border: 1px solid #334155;
+            box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.6); 
+            transition: all 0.2s ease-in-out;
+            cursor: default;
+            /* NEW FIX: Ensure inner content doesn't create internal scroll */
+            overflow: hidden;
+        }
+
+        .achievement-card:hover {
+            transform: scale(1.01);
+            box-shadow: 0 15px 30px -8px rgba(0, 0, 0, 0.8);
+        }
+
+        /* --- Performance Color Styles (Applied to WHOLE CARD - SOFTER HUES) --- */
+        
+        /* Failure (0 - 49% achieved) */
+        .failure-red {
+             background-color: #281116; /* Very dark, subtle red/maroon */
+             border-color: #dc2626; /* Red 600 */
+        }
+        /* Half Target (50% - 99% achieved) */
+        .half-target {
+             background-color: #282310; /* Very dark, subtle yellow/brown */
+             border-color: #fbbf24; /* Amber 400 */
+        }
+        /* Success (100%+ achieved) */
+        .success {
+             background-color: #11211e; /* Very dark, subtle green/teal */
+             border-color: #10b981; /* Emerald 500 */
+        }
+
+        /* --- Header Styles --- */
+        .status-header {
+            border-bottom: 2px solid;
+            padding-bottom: 12px;
+            margin-bottom: 8px; /* Reduced margin */
+            color: white !important; 
+        }
+
+        /* Set header border colors to match the card border */
+        .success .status-header { border-color: #10b981; }
+        .half-target .status-header { border-color: #fbbf24; }
+        .failure-red .status-header { border-color: #dc2626; }
+        
+        /* Icon Colors */
+        .success .icon-color { color: #10b981; }
+        .half-target .icon-color { color: #fbbf24; }
+        .failure-red .icon-color { color: #dc2626; }
+
+        /* --- Input Styles for Contrast --- */
+        /* SALES DISPLAY STYLE */
+        .sales-display {
+            width: 70px;
+            text-align: center;
+            padding: 3px;
+            border-radius: 6px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+            color: #fff;
+            font-size: 1.125rem; 
+            font-weight: 700;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 36px; /* Match input height */
+        }
+        
+        input[type="number"].target-input {
+            /* CRITICAL FIX: Reduced width to prevent overlap */
+            width: 50px; 
+            padding: 4px 2px;
+            text-align: center;
+            border-radius: 6px;
+            background-color: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1.5rem; 
+            font-weight: 800; 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+        }
+
+        /* Rep List Text Color */
+        .achievement-card li span {
+            color: #d1d5db;
+            font-size: 1.125rem; 
+        }
+        
+    </style>
+</head>
+<body class="p-8 h-screen overflow-hidden flex flex-col">
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed top-0 left-0 w-full h-full bg-slate-900 bg-opacity-90 flex justify-center items-center z-50 hidden">
+        <div class="text-white text-3xl font-bold flex items-center">
+            <svg class="animate-spin -ml-1 mr-4 h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            Fetching Live Sales Data...
+        </div>
+    </div>
+    
+    <div class="max-w-full mx-auto flex flex-col flex-grow w-full"> 
+        
+        <!-- Header -->
+        <header class="text-left mb-6 flex justify-between items-end">
+            <div>
+                <!-- Maximized Clock -->
+                <div id="liveClock" class="text-4xl font-bold text-slate-400 mb-2"></div>
+                <h1 class="text-4xl font-extrabold text-white">Swedzo Meuble Sales Tracker</h1>
+            </div>
+        </header>
+
+        <!-- Current Status & Countdown Timer -->
+        <div id="statusContainer" class="bg-teal-600 p-6 rounded-xl shadow-lg mb-6 flex flex-col items-center transition duration-300">
+            <div id="statusTextWrapper" class="text-xl font-semibold text-white flex space-x-12 items-center text-center">
+                <span>
+                    Current Period: <span class="text-4xl font-extrabold" id="currentHourDisplay">--</span>
+                </span>
+                <div class="h-8 w-px bg-white bg-opacity-50"></div> 
+                <span>
+                    Time Left: <span class="text-4xl font-extrabold text-yellow-300" id="countdownDisplay">--:--</span>
+                </span>
+            </div>
+        </div>
+        
+        <!-- Team Grid -->
+        <div id="teamGrid" class="grid grid-cols-4 gap-4 overflow-y-auto" style="height: calc(100vh - 300px);">
+            <p class="text-white col-span-full text-center p-8 bg-slate-800 rounded-xl">Loading team configuration...</p>
+        </div>
+
+        <!-- Toggle Button for Summary/History -->
+        <div class="text-center mt-4 mb-0">
+            <button id="toggleSummaryButton" onclick="toggleSummary()"
+                    class="px-8 py-3 bg-teal-500 text-base text-white font-bold rounded-xl hover:bg-teal-700 transition duration-150 ease-in-out transform hover:scale-105 shadow-2xl">
+                Show Last Hour Summary
+            </button>
+        </div>
+
+        <!-- Summary and History Container (Initially hidden, moved to bottom) -->
+        <div id="summaryAndHistoryContainer" class="hidden absolute top-0 left-0 w-full h-full bg-slate-900 bg-opacity-95 p-8 z-40 overflow-y-auto">
+            <div id="dailySummaryContainer" class="max-w-5xl mx-auto p-8 rounded-xl shadow-2xl transition duration-300">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-white">Last Completed Hour Performance</h2>
+                    <button onclick="toggleSummary()" class="text-white text-3xl hover:text-red-400 transition">
+                         &times;
+                    </button>
+                </div>
+                <div id="dailySummary" class="grid grid-cols-4 gap-8 text-center"></div>
+            </div>
+        </div>
+
+        <div id="messageBox" class="fixed bottom-4 right-4 p-4 rounded-lg text-lg text-white font-semibold transition-opacity duration-300 opacity-0 pointer-events-none z-50"></div>
+
+    </div>
+
+    <script>
+        // Global Constants
+        const REFRESH_INTERVAL_MS = 10000; // 10 seconds for sales data refresh
+        
+        // !!! API URL UPDATED WITH NEW URL !!!
+        const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbx1lM9ZqJ_h-BtOgClbNMeJA_4M5ChVYMmhdJiFoX_ZyJB9MnZIBRgXLtqcqnrD6OxMkQ/exec';
+        
+        // Theme Cycle for Summary Cards (Internal)
+        const THEME_CYCLE = [
+            { card: 'bg-slate-800', inner: 'bg-slate-700', border: 'border-slate-700', text: 'text-teal-400' },
+            { card: 'bg-blue-900', inner: 'bg-blue-800', border: 'border-blue-800', text: 'text-blue-400' },
+            { card: 'bg-purple-900', inner: 'bg-purple-800', border: 'border-purple-800', text: 'text-purple-400' },
+            { card: 'bg-emerald-900', inner: 'bg-emerald-800', border: 'border-emerald-800', text: 'text-emerald-400' }
+        ];
+
+        const BODY_BACKGROUND_CYCLE = [
+            '#0f172a', '#1c1917', '#111827', '#062c3e', '#271020', '#271e10' 
+        ];
+
+        // State Variables
+        let teamStructure = {}; 
+        let lastCompletedHourData = { teams: [], totalSales: 0, totalTarget: 0 }; 
+        let countdownInterval = null;
+        let refreshInterval = null;
+        let timeRemainingInSeconds = 0; 
+        let isFetching = false;
+        
+        // DOM Elements
+        const liveClock = document.getElementById('liveClock'); 
+        const teamGrid = document.getElementById('teamGrid');
+        const currentHourDisplay = document.getElementById('currentHourDisplay');
+        const messageBox = document.getElementById('messageBox');
+        const dailySummary = document.getElementById('dailySummary');
+        const dailySummaryContainer = document.getElementById('dailySummaryContainer');
+        const countdownDisplay = document.getElementById('countdownDisplay');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const toggleSummaryButton = document.getElementById('toggleSummaryButton');
+        const statusContainer = document.getElementById('statusContainer');
+
+
+        // --- Utility Functions ---
+        
+        function showLoading(show) {
+            loadingOverlay.classList.toggle('hidden', !show);
+            isFetching = show;
+        }
+
+        function showMessage(message, type = 'info') {
+            messageBox.textContent = message;
+            messageBox.classList.remove('bg-red-500', 'bg-blue-500', 'bg-green-500', 'opacity-0', 'pointer-events-none');
+            
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-500');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-500');
+            } else {
+                messageBox.classList.add('bg-blue-500');
+            }
+
+            messageBox.classList.add('opacity-100');
+            messageBox.classList.remove('pointer-events-none');
+
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const dateString = now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            liveClock.textContent = `Live: ${dateString} ${timeString}`;
+        }
+
+        function formatHourToTime(hour24) {
+            let hour = hour24 % 24; 
+            if (hour === 0) hour = 24;
+            
+            let displayHour = hour;
+            let ampm = 'AM';
+
+            if (displayHour === 24) {
+                displayHour = 12; 
+            } else if (displayHour === 12) {
+                ampm = 'PM';
+            } else if (displayHour > 12) {
+                displayHour = displayHour - 12;
+                ampm = 'PM';
+            }
+            return `${displayHour} ${ampm}`;
+        }
+        
+        // --- Timer Logic (Tied to Wall Clock) ---
+        
+        function getSecondsUntilNextHour() {
+            const now = new Date();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+            const totalSecondsPassed = minutes * 60 + seconds;
+            return 3600 - totalSecondsPassed; 
+        }
+
+        function updateCountdownDisplay(seconds) {
+            timeRemainingInSeconds = seconds;
+            const minutes = Math.floor(timeRemainingInSeconds / 60);
+            const displaySeconds = timeRemainingInSeconds % 60;
+            const display = `${String(minutes).padStart(2, '0')}:${String(displaySeconds).padStart(2, '0')}`;
+            
+            countdownDisplay.textContent = display;
+            
+            // --- TIME LEFT COLOR LOGIC ---
+            
+            if (timeRemainingInSeconds <= 300) {
+                countdownDisplay.classList.remove('text-yellow-300');
+                countdownDisplay.classList.add('text-red-400');
+            } else {
+                countdownDisplay.classList.remove('text-red-400');
+                countdownDisplay.classList.add('text-yellow-300');
+            }
+            
+            if (timeRemainingInSeconds <= 900) {
+                statusContainer.classList.remove('bg-teal-600');
+                statusContainer.classList.add('bg-red-700');
+            } else {
+                statusContainer.classList.remove('bg-red-700');
+                statusContainer.classList.add('bg-teal-600');
+            }
+        }
+
+        function stopCountdown() {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+        }
+
+        function startCountdown() {
+            stopCountdown(); 
+            
+            let timeToStartWith = getSecondsUntilNextHour();
+            updateCountdownDisplay(timeToStartWith);
+            
+            countdownInterval = setInterval(() => {
+                if (timeRemainingInSeconds <= 1 && !isFetching) { 
+                    stopCountdown();
+                    
+                    // --- AUTOMATIC HOUR END LOGIC (RESET) ---
+                    
+                    captureAndSaveLastHourSummary(); 
+                    
+                    // Force refresh to get latest config and render reset inputs
+                    fetchAndProcessData(true); 
+                    startCountdown(); 
+                    // Message instructs user that manual sheet clear is required for next period
+                    showMessage(`New Hour Started! Sales inputs reset to zero (Waiting for Sheet update).`, 'success');
+                    
+                } else {
+                    timeRemainingInSeconds--;
+                    updateCountdownDisplay(timeRemainingInSeconds);
+                }
+            }, 1000);
+        }
+        
+        // --- Summary Logic (No Google Sheet write, just local capture) ---
+        
+        function captureAndSaveLastHourSummary() {
+            // Use the current teamStructure (which holds the final sales for the hour)
+            const now = new Date();
+            const lastHour = formatHourToTime(now.getHours()); 
+            
+            let totalSales = 0;
+            let totalTarget = 0;
+            let teamsAchieved = 0;
+            const teamsData = [];
+
+            Object.values(teamStructure).forEach(teamConfig => {
+                const sales = teamConfig.totalSales || 0;
+                const target = teamConfig.target || 2;
+                
+                totalSales += sales;
+                totalTarget += target;
+                if (sales >= target) {
+                    teamsAchieved++;
+                }
+
+                teamsData.push({
+                    name: teamConfig.name,
+                    sales: sales,
+                    target: target,
+                    achieved: sales >= target
+                });
+            });
+            
+            lastCompletedHourData = {
+                hour: lastHour,
+                teams: teamsData,
+                totalSales: totalSales,
+                totalTarget: totalTarget,
+                teamsAchieved: teamsAchieved
+            };
+
+            toggleSummaryButton.textContent = `Show Last Hour Summary (${lastHour})`;
+        }
+
+
+        // --- Summary Toggle ---
+        
+        function toggleSummary() {
+            const isHidden = summaryAndHistoryContainer.classList.contains('hidden');
+            if (isHidden) {
+                summaryAndHistoryContainer.classList.remove('hidden');
+                renderDailySummary(true); 
+            } else {
+                summaryAndHistoryContainer.classList.add('hidden');
+            }
+
+            toggleSummaryButton.textContent = isHidden ? 'Hide Last Hour Summary' : `Show Last Hour Summary (${lastCompletedHourData.hour || '--'})`;
+        }
+
+        // --- Data Fetching Logic (GET Request) ---
+
+        async function fetchAndProcessData(forceFullRefresh = false) {
+            
+            if (isFetching && !forceFullRefresh) return; 
+            
+            if (forceFullRefresh) {
+                showLoading(true);
+            }
+
+            try {
+                let success = false;
+                let lastError = null;
+                const maxRetries = 3;
+                let result;
+                
+                for (let i = 0; i < maxRetries; i++) {
+                    const response = await fetch(GOOGLE_SHEET_API_URL); 
+                    result = await response.json();
+
+                    if (response.ok && result.success) {
+                        success = true;
+                        break;
+                    } else {
+                        lastError = new Error(`API Error: ${result.message || response.statusText}`);
+                        if (i < maxRetries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i + 1) * 1000));
+                        }
+                    }
+                }
+                
+                if (!success) {
+                    throw lastError;
+                }
+                
+                // Update global state with LIVE data from Google Sheet
+                teamStructure = result.teamStructure || {}; 
+                
+            } catch (error) {
+                console.error("Configuration Fetch Error:", error);
+                if (forceFullRefresh) { 
+                    showMessage(`Failed to fetch sales data: ${error.message}. Check Apps Script permissions.`, 'error');
+                }
+            } finally {
+                showLoading(false); 
+                renderDashboard();
+            }
+        }
+        
+        // --- Rendering Logic ---
+        
+        function setBodyBackgroundColor() {
+            const now = new Date();
+            const hourIndex = now.getHours() % BODY_BACKGROUND_CYCLE.length;
+            document.body.style.backgroundColor = BODY_BACKGROUND_CYCLE[hourIndex];
+        }
+
+        function renderTeamGrid() {
+            teamGrid.innerHTML = '';
+
+            const teamsToRender = Object.values(teamStructure);
+
+            if (teamsToRender.length === 0) {
+                 teamGrid.innerHTML = '<p class="text-white col-span-full text-center p-8 bg-slate-800 rounded-xl">No teams found. Please check Google Sheet data.</p>';
+                 return;
+            }
+            
+            const MAX_DISPLAY_REPS = 8;
+
+            teamsToRender.forEach(teamConfig => {
+                 const teamId = teamConfig.id;
+                 
+                 // --- CALCULATE DYNAMIC VALUES ---
+                 let sales = teamConfig.totalSales || 0; 
+                 const target = teamConfig.target || 2; 
+
+                 let statusClass = '';
+                 let iconPath = '';
+
+                 const achievementPercent = target > 0 ? (sales / target) * 100 : 0;
+
+                 if (achievementPercent >= 100) { 
+                     statusClass = 'success';
+                     iconPath = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+                 } else if (achievementPercent >= 50) { 
+                     statusClass = 'half-target';
+                     iconPath = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>';
+                 } else { 
+                     statusClass = 'failure-red';
+                     iconPath = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+                 }
+                 
+                 // --- RENDER REP LIST WITH DISPLAY FIELDS ---
+                 const teamReps = teamConfig.reps || [];
+                 
+                 let repListHtml = '';
+                 
+                 for (let index = 0; index < teamReps.length; index++) {
+                     const rep = teamReps[index];
+                     const repName = rep.name || `Unassigned Rep ${index + 1}`; 
+                     
+                     repListHtml += `
+                         <li class="flex justify-between items-center py-2 last:pb-0">
+                             <span class="text-lg font-medium text-slate-300 truncate flex-grow mr-2 min-w-0">${repName}</span>
+                             <span class="sales-display">${rep.sales}</span>
+                         </li>
+                     `;
+                 }
+                 
+                 // Padding loop to fill the fixed height for 8 reps
+                 const paddingNeeded = MAX_DISPLAY_REPS - teamReps.length;
+                 for (let i = 0; i < paddingNeeded; i++) {
+                      repListHtml += `
+                         <li class="flex justify-between items-center py-2 last:pb-0 opacity-0 pointer-events-none">
+                             <span class="text-lg font-medium text-slate-300 truncate flex-grow mr-2 min-w-0">Placeholder</span>
+                             <span class="sales-display">0</span>
+                         </li>
+                     `;
+                 }
+
+                 const teamName = teamConfig.name || `Team ${teamConfig.id}`;
+
+                 const cardHtml = `
+                     <div class="achievement-card ${statusClass} p-5 rounded-xl border-t-8 border-opacity-75 flex flex-col justify-between">
+                         
+                         <!-- Header Section (Status Bar) -->
+                         <div class="status-header flex flex-col">
+                             <div class="flex items-center justify-between">
+                                 <div class="flex items-center">
+                                     <svg class="w-7 h-7 mr-2 icon-color" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">${iconPath}</svg>
+                                     <h2 class="text-xl font-extrabold text-white">${teamName}</h2>
+                                 </div>
+                                 <!-- Target Display Field (Still editable for local viewing) -->
+                                 <div class="flex items-center">
+                                    <span class="text-base font-medium text-slate-200 mr-1">Target:</span>
+                                    <input type="number" min="1" value="${target}" 
+                                           class="target-input" 
+                                           data-team-id="${teamConfig.id}">
+                                 </div>
+                             </div>
+                             
+                             <!-- Total Sales Display -->
+                             <div class="flex justify-between items-baseline mt-3">
+                                 <p class="text-base font-medium text-slate-200 uppercase">Total Sales</p>
+                                 <div>
+                                     <span class="text-4xl font-extrabold text-white">${sales}</span>
+                                     <span class="text-xl text-slate-300"> / ${target}</span>
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         <!-- Rep Sales Entry List -->
+                         <div class="pt-4">
+                             <ul class="space-y-1">${repListHtml}</ul>
+                         </div>
+                     </div>
+                 `;
+                
+                 teamGrid.innerHTML += cardHtml;
+            });
+        }
+
+        function renderDailySummary(isToggle = false) {
+            const currentTheme = THEME_CYCLE[new Date().getHours() % THEME_CYCLE.length];
+            
+            if (!lastCompletedHourData.teams || lastCompletedHourData.teams.length === 0) {
+                 dailySummaryContainer.classList.remove('hidden');
+                 dailySummaryContainer.innerHTML = `<h2 class="text-3xl font-bold text-white mb-6 border-b pb-4">Last Completed Hour Performance</h2><p class="${currentTheme.text} p-6 text-center text-xl">No sales data was captured in the last hour to display here.</p>`;
+                 if (!isToggle) summaryAndHistoryContainer.classList.add('hidden');
+                 return;
+            }
+
+            dailySummaryContainer.classList.remove('hidden');
+            dailySummaryContainer.classList.add(currentTheme.card);
+
+            const totalTeams = lastCompletedHourData.teams.length;
+            const overallAchievement = lastCompletedHourData.totalTarget > 0 ? Math.round((lastCompletedHourData.totalSales / lastCompletedHourData.totalTarget) * 100) : 0;
+            const achievementColor = overallAchievement >= 100 ? 'text-green-400' : 
+                                     overallAchievement >= 50 ? 'text-yellow-400' : 
+                                                               'text-red-400';
+            
+            dailySummary.innerHTML = `
+                <div class="p-4 ${currentTheme.inner} rounded-lg">
+                    <p class="text-4xl font-extrabold ${currentTheme.text}">${lastCompletedHourData.totalSales}</p>
+                    <p class="text-lg font-medium text-slate-400">Total Sales (Last Hour)</p>
+                </div>
+                <div class="p-4 ${currentTheme.inner} rounded-lg">
+                    <p class="text-4xl font-extrabold ${currentTheme.text}">${lastCompletedHourData.teamsAchieved}</p>
+                    <p class="text-lg font-medium text-slate-400">Teams Hit Target / ${totalTeams}</p>
+                </div>
+                <div class="p-4 ${currentTheme.inner} rounded-lg col-span-2">
+                    <p class="text-4xl font-extrabold ${achievementColor}">${overallAchievement}%</p>
+                    <p class="text-lg font-medium text-slate-400">Overall Target Achievement</p>
+                </div>
+            `;
+            
+            let teamDetailHtml = `<div class="col-span-4 mt-6 pt-6 border-t border-slate-600">`;
+            teamDetailHtml += `<p class="text-xl font-bold text-white mb-4">Team Breakdown (${lastCompletedHourData.hour})</p>`;
+            teamDetailHtml += `<ul class="grid grid-cols-4 gap-4">`;
+            
+            lastCompletedHourData.teams.forEach(team => {
+                const teamStatusClass = team.achieved ? 'text-green-400' : 'text-red-400';
+                teamDetailHtml += `<li class="flex flex-col text-base ${teamStatusClass} p-2 ${currentTheme.inner} rounded-lg">
+                    <span class="font-bold">${team.name}</span>
+                    <span class="font-light text-xl mt-1">${team.sales} / ${team.target}</span>
+                </li>`;
+            });
+            
+            teamDetailHtml += `</ul></div>`;
+            dailySummary.innerHTML += teamDetailHtml;
+        }
+
+        function renderDashboard() {
+            setBodyBackgroundColor();
+            
+            const now = new Date();
+            const wallHour24 = now.getHours();
+
+            currentHourDisplay.textContent = formatHourToTime(wallHour24);
+            renderTeamGrid();
+
+            if (lastCompletedHourData.teams.length > 0) {
+                 toggleSummaryButton.textContent = `Show Last Hour Summary (${lastCompletedHourData.hour})`;
+            }
+        }
+        
+        // --- Initialization and Clock Setup ---
+        
+        function checkInitialDataLoad() { 
+            fetchAndProcessData(true); 
+            
+            refreshInterval = setInterval(() => {
+                fetchAndProcessData(false); 
+            }, REFRESH_INTERVAL_MS);
+        }
+
+        // Attach Event Listeners
+        toggleSummaryButton.addEventListener('click', toggleSummary);
+
+        // Initial Load and Clock Setup
+        window.onload = function() {
+            checkInitialDataLoad(); 
+            updateClock();
+            setInterval(updateClock, 1000); 
+            startCountdown(); 
+        };
+
+    </script>
+</body>
+</html>
